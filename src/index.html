@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Locked In — Escape Room</title>
+<style>
+  :root { --gold: #e3c27a; --ink: #f3ead8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #070504; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); user-select: none; }
+  #game canvas { display: block; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%); }
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .8s; }
+  #fade.on { opacity: 1; }
+  #hud { display: none; }
+  #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,.75); box-shadow: 0 0 4px #000; transition: all .12s; }
+  #cross.active { width: 14px; height: 14px; margin: -7px 0 0 -7px; background: transparent; border: 2px solid var(--gold); }
+  #prompt { position: fixed; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); font-size: 15px; text-shadow: 0 1px 3px #000, 0 0 8px #000; white-space: nowrap; }
+  .k { display: inline-block; background: rgba(227,194,122,.92); color: #1a1006; font-weight: 700; font-size: 12px; padding: 1px 7px; border-radius: 4px; margin-right: 4px; vertical-align: 1px; }
+  #noteBody .riddle { font-size: 21px; font-style: italic; text-align: center; margin: 14px 0; }
+  #noteBody .rl p { margin: 6px 0; padding-left: 10px; border-left: 3px solid #b8923e; }
+  #noteBody table.ci { margin: 0 auto; border-collapse: collapse; font-size: 22px; font-weight: bold; }
+  #noteBody table.ci td { border: 1px solid #8a6a3a; padding: 6px 14px; }
+  #noteBody.book { background: linear-gradient(90deg, #e8dcbc 0%, #f6eed8 48%, #d8c8a0 50%, #f6eed8 52%, #ece0c4 100%); width: min(620px, 92vw); transform: none; border: 10px solid #5a2a1a; border-radius: 6px; }
+  #confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  #confetti i { position: absolute; top: -20px; width: 9px; height: 15px; animation: fall linear infinite; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+  .trophy { font-size: 72px; animation: pop .8s cubic-bezier(.2,1.6,.4,1); filter: drop-shadow(0 0 20px rgba(227,194,122,.6)); }
+  @keyframes pop { from { transform: scale(0) rotate(-40deg); } }
+  #stars { font-size: 56px; letter-spacing: 10px; margin: 4px 0 6px; }
+  #stars span { color: #3a3226; display: inline-block; animation: pop .6s backwards; }
+  #stars span.on { color: #ffd34a; text-shadow: 0 0 18px rgba(255,211,74,.7); }
+  .rank { font-family: Georgia, serif; font-size: 28px; color: var(--gold); margin-bottom: 6px; }
+  #info { position: fixed; left: 18px; top: 14px; font-size: 14px; text-shadow: 0 1px 3px #000; opacity: .92; }
+  #info .room { font-family: Georgia, serif; font-size: 26px; letter-spacing: 4px; color: var(--gold); }
+  #objective { position: fixed; left: 18px; top: 74px; font-size: 13px; font-style: italic; opacity: .8; text-shadow: 0 1px 3px #000; }
+  #keys { position: fixed; right: 16px; top: 14px; font-size: 12px; opacity: .55; text-align: right; line-height: 1.6; text-shadow: 0 1px 2px #000; }
+  #hotbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; }
+  .slot { width: 56px; height: 56px; border-radius: 8px; background: rgba(15,10,6,.6); border: 2px solid rgba(255,255,255,.15); position: relative; display: flex; align-items: center; justify-content: center; }
+  .slot.sel { border-color: var(--gold); box-shadow: 0 0 12px rgba(227,194,122,.5); }
+  .slot .num { position: absolute; left: 4px; top: 1px; font-size: 10px; opacity: .6; }
+  .slot .ic { font-size: 26px; }
+  .slot .chip { position: absolute; bottom: 5px; left: 10px; right: 10px; height: 4px; border-radius: 2px; }
+  #heldName { position: fixed; left: 50%; bottom: 82px; transform: translateX(-50%); font-size: 14px; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+  #toasts { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(680px, 92vw); }
+  .toast { background: rgba(12,8,5,.82); border: 1px solid rgba(227,194,122,.35); padding: 8px 16px; border-radius: 8px; font-size: 15px; text-align: center; animation: tin .25s ease-out; transition: opacity .6s; }
+  .toast.out { opacity: 0; }
+  @keyframes tin { from { transform: translateY(-8px); opacity: 0; } }
+  #note { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); }
+  #note.show { display: flex; }
+  #noteBody { width: min(440px, 90vw); padding: 30px 34px; color: #2a1c10; font-family: Georgia, serif; font-size: 18px; line-height: 1.5;
+    background: linear-gradient(135deg, #f4e9cc, #e6d4a8); box-shadow: 0 10px 40px rgba(0,0,0,.6), inset 0 0 40px rgba(120,80,30,.25); transform: rotate(-1.5deg); border-radius: 3px; }
+  #noteBody h2 { margin: 0 0 10px; font-size: 20px; font-style: italic; color: #5a3a1a; }
+  #noteBody .clue { text-align: center; margin: 16px 0; }
+  #noteBody .big { font-size: 40px; letter-spacing: 6px; font-weight: bold; font-family: "Courier New", monospace; }
+  #noteBody .sq { display: inline-block; width: 38px; height: 38px; margin: 0 4px; border: 2px solid #3a2a1a; border-radius: 4px; vertical-align: middle; }
+  #noteBody .sig { text-align: right; font-style: italic; opacity: .7; }
+  #noteBody::after { content: "click / E to put away"; display: block; margin-top: 14px; font-size: 12px; opacity: .55; font-family: "Segoe UI", sans-serif; text-align: center; }
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center;
+    background: radial-gradient(ellipse at center, rgba(20,12,6,.55), rgba(0,0,0,.85)); }
+  .overlay.show { display: flex; z-index: 10; }
+  .overlay h1 { font-family: Georgia, serif; font-size: clamp(44px, 8vw, 86px); letter-spacing: 10px; margin: 0; color: var(--gold); text-shadow: 0 0 30px rgba(227,194,122,.35), 0 4px 10px #000; }
+  .overlay h2 { font-family: Georgia, serif; font-weight: normal; font-style: italic; margin: 6px 0 26px; opacity: .85; }
+  .btn { font: 600 18px "Segoe UI", sans-serif; color: #1a1006; background: linear-gradient(#f0d48e, #c99a48); border: 0; padding: 13px 38px; border-radius: 6px; margin: 6px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.5); letter-spacing: 1px; }
+  .btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid rgba(255,255,255,.3); }
+  .controls { margin-top: 26px; display: grid; grid-template-columns: auto auto; gap: 4px 18px; font-size: 14px; opacity: .85; text-align: left; }
+  .controls b { color: var(--gold); text-align: right; }
+  .small { font-size: 13px; opacity: .6; margin-top: 18px; max-width: 560px; line-height: 1.5; }
+  #best { color: var(--gold); margin-top: 10px; font-size: 14px; }
+  #winStats { font-size: 20px; line-height: 1.6; margin-bottom: 20px; }
+  label.sl { margin-top: 18px; font-size: 13px; opacity: .8; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="vignette"></div>
+<div id="hud">
+  <div id="cross"></div><div id="prompt"></div>
+  <div id="info"></div><div id="objective"></div>
+  <div id="keys">WASD move · Shift run · C crouch<br>L-Click grab/use · E open/close · R-Click drop<br>1-6/Wheel select · R read · H hint · M mute</div>
+  <div id="toasts"></div>
+  <div id="heldName"></div><div id="hotbar"></div>
+</div>
+<div id="note"><div id="noteBody"></div></div>
+
+<div id="menu" class="overlay show">
+  <h1>LOCKED IN</h1>
+  <h2>an escape room</h2>
+  <button class="btn" id="btnStart">ENTER THE ROOM</button>
+  <div id="best"></div>
+  <div class="controls">
+    <b>Mouse</b><span>Look around</span>
+    <b>WASD</b><span>Move (Shift run, C crouch)</span>
+    <b>Left-click</b><span>Grab things, press buttons, use the held item on a lock</span>
+    <b>E</b><span>Open / close drawers, cabinets, chests, paintings</span>
+    <b>Right-click</b><span>Put down / drop what you're holding</span>
+    <b>1-6 / Wheel</b><span>Choose which item is in your hand</span>
+    <b>R</b><span>Read the note / book / card in your hand</span>
+    <b>H</b><span>Hint (press twice for more detail)</span>
+  </div>
+  <div class="small">Every room is procedurally generated: riddles, word locks, ciphers, scattered number cards, torn notes, books, hidden UV writing, keypads, symbol dials, lever panels, color sequences, gem sockets, wall safes and nailed crates — plus plenty of red herrings. Escape one room and a harder one waits behind the door, forever.</div>
+</div>
+
+<div id="pause" class="overlay">
+  <h1 style="font-size:52px">PAUSED</h1>
+  <h2>click resume to continue</h2>
+  <button class="btn" id="btnResume">RESUME</button>
+  <button class="btn ghost" id="btnRestart">New layout for this room</button>
+  <button class="btn ghost" id="btnMenu">Main menu</button>
+  <label class="sl">Mouse sensitivity <input id="sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
+</div>
+
+<div id="win" class="overlay">
+  <div id="confetti"></div>
+  <div class="trophy">🗝️</div>
+  <h1 style="font-size:72px">YOU ESCAPED!</h1>
+  <div id="stars"></div>
+  <h2>the corridor leads to another locked room…</h2>
+  <div id="winStats"></div>
+  <button class="btn" id="btnNext">ENTER THE NEXT ROOM</button>
+  <button class="btn ghost" id="btnMenu2">Main menu</button>
+</div>
+<div id="fade"></div>
+<!--SCRIPTS-->
+</body>
+</html>
